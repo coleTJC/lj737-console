@@ -1,0 +1,8 @@
+{
+  "name": "lj737-console",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test", "start": "node tools/serve.mjs" },
+  "engines": { "node": ">=20" }
+}
