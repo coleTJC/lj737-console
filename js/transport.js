@@ -46,7 +46,7 @@ export class BluetoothTransport extends EventTarget {
     this.connecting = true;
     const generation = ++this.generation;
     try {
-      const optionalServices = [UUID.service, 0x180f, 0x180a];
+      const optionalServices = [UUID.service, 0x180f, 0x180a, 0xae00];
       const options = showAll ? { acceptAllDevices: true, optionalServices } : {
         filters: [{ name: 'MOVEMENT' }, { name: 'Movement' }, { services: [UUID.service] }], optionalServices,
       };
@@ -114,6 +114,23 @@ export class BluetoothTransport extends EventTarget {
       return result;
     });
   }
+  async inspectOTA() {
+    return this.run(async () => {
+      if (!this.connected) throw new Error('Connect first.');
+      const generation = this.generation;
+      const service = await this.server.getPrimaryService(0xae00);
+      const result = { Service:'AE00 discovered', Authentication:'Unknown / not attempted', Flashing:'Disabled' };
+      for (const uuid of [0xae01,0xae02]) {
+        try {
+          const characteristic = await service.getCharacteristic(uuid);
+          const properties = ['read','write','writeWithoutResponse','notify','indicate'].filter(name => characteristic.properties[name]);
+          result[uuid.toString(16).toUpperCase()] = properties.join(', ') || 'No recognized properties';
+        } catch (error) { result[uuid.toString(16).toUpperCase()] = `Unavailable: ${error.message}`; }
+      }
+      if (generation !== this.generation || !this.connected) throw new Error('Disconnected during inspection.');
+      return result;
+    });
+  }
   async readBattery(subscribe = false) {
     return this.run(async () => {
       if (!this.connected) throw new Error('Connect first.');
@@ -152,7 +169,7 @@ export class BluetoothTransport extends EventTarget {
           else if (writer.properties.write) await Promise.race([writer.writeValueWithResponse(chunk), deadline]);
           else throw new Error('Characteristic does not support writes.');
         } finally { clearTimeout(timer); }
-        this.emit('packet', { direction: 'TX', bytes: chunk, characteristic: UUID.write });
+        this.emit('packet', { direction: 'TX', bytes: chunk, characteristic: UUID.write, commandPacket: copy });
         await delay(12);
       }
     }); } catch (error) {

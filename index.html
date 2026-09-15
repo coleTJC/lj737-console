@@ -5,16 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#111715">
   <meta name="description" content="A local-first Web Bluetooth development console for MOVEMENT LJ737 watches.">
-  <title>LJ737 / Field Console</title>
+  <title>LJ737 / Device Lab</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111715'/%3E%3Cpath d='M8 9v14h14M14 9h10v8' fill='none' stroke='%23beef82' stroke-width='3'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="lab.css">
   <script type="module" src="js/app.js"></script>
 </head>
 <body>
   <a class="skip" href="#workspace">Skip to workspace</a>
   <header class="topbar">
     <a class="brand" href="./" aria-label="LJ737 Field Console home"><span class="brand-mark">LJ<span>↗</span></span><span>LJ737 <span class="brand-muted">/ FIELD CONSOLE</span></span></a>
-    <span class="version">LOCAL FIRST <span class="dot"></span> V1.0</span>
+    <span class="version">LOCAL FIRST <span class="dot"></span> V2.0</span>
   </header>
   <div class="shell">
     <aside class="sidebar">
@@ -22,7 +23,8 @@
       <nav aria-label="Workspace sections">
         <button class="nav-item active" data-panel="device" aria-current="page"><span class="nav-icon">⌁</span> Device <span class="nav-index">01</span></button>
         <button class="nav-item" data-panel="dials"><span class="nav-icon">▧</span> Watchfaces <span class="nav-index">02</span></button>
-        <button class="nav-item" data-panel="console"><span class="nav-icon">›_</span> Console <span class="nav-index">03</span></button>
+        <button class="nav-item" data-panel="lab"><span class="nav-icon">⚙</span> Device Lab <span class="nav-index">03</span></button>
+        <button class="nav-item" data-panel="console"><span class="nav-icon">›_</span> Console <span class="nav-index">04</span></button>
         <button class="nav-item" data-panel="ota"><span class="nav-icon">⇡</span> OTA <span class="nav-index">LOCKED</span></button>
       </nav>
       <div class="side-foot"><span class="tiny-label">TRANSPORT</span><p>Web Bluetooth<br><span class="muted">GATT · browser → watch</span></p><div class="signal-lines"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><span class="tiny-label">NO CLOUD. JUST YOUR WATCH.</span></div>
@@ -31,6 +33,15 @@
       <div class="workspace-heading"><div><p class="eyebrow">MOVEMENT / LJ737</p><h1 id="page-title">Device overview<span class="mint">.</span></h1></div><span id="connection-badge" class="status-pill"><span class="dot"></span> DISCONNECTED</span></div>
       <div id="compatibility" class="compatibility" role="status">Checking browser capabilities…</div>
       <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+      <div id="known-device" class="known-banner" role="status"></div>
+
+      <section id="panel-lab" class="panel" aria-label="Device Lab controls" hidden>
+        <div class="section-intro"><p>Choose a command. Inspect its packet. Test on your watch.<br><span class="muted">Desired values are not live settings. No automatic commands on connect.</span></p></div>
+        <p class="safety-legend"><span class="badge safe">Safe</span> Settings / measurements <span class="badge experimental">Experimental</span> Partially decoded <span class="badge dangerous">Dangerous</span> Firmware · disabled</p>
+        <div id="lab-cards" class="lab-grid"></div>
+        <article class="card lab-transfer"><span class="badge experimental">Experimental</span><h3>Watchface transfer & custom dials</h3><p>Use the Watchfaces tab to inspect files, validate length/checksums, review every transfer packet, upload with acknowledged progress, or cancel.</p><button id="open-watchfaces">Open Watchfaces ↗</button></article>
+        <details class="card" open><summary>Protocol Reference · shared command registry</summary><div id="protocol-reference" class="table-wrap"></div></details>
+      </section>
 
       <section id="panel-device" class="panel" aria-label="Device overview">
         <div class="overview-grid">

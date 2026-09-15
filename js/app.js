@@ -1,7 +1,11 @@
 import { BluetoothTransport, DEVICE_FIELDS } from './transport.js';
-import { LJ737, hex, parseHex, frame } from './protocol.js';
+import { LJ737, hex, parseHex, settings, FrameStream } from './protocol.js';
 import { inspectDial, sha256, PREFIX_SIZE, PIXEL_BYTES, MAX_DIAL_BYTES } from './watchface.js';
 import { setupBuilder } from './builder-ui.js';
+import { COMMANDS, decodePacket, knownDevice } from './commands.js';
+import { setupLab, prepareLabShell } from './lab-ui.js';
+import { exportSession, importSession, MAX_ENTRIES } from './session.js';
+import { transferPreview } from './transfer-preview.js';
 
 const element = id => document.getElementById(id);
 const transport = new BluetoothTransport();
@@ -14,6 +18,9 @@ let selectionGeneration = 0;
 let session = 0;
 let logRenderPending = false;
 const bluetoothAvailable = Boolean(globalThis.isSecureContext && navigator.bluetooth);
+prepareLabShell();
+let rxStream = new FrameStream();
+let droppedEntries = 0;
 
 function download(data, name, type = 'text/plain') {
   const url = URL.createObjectURL(new Blob([data], { type }));
@@ -31,27 +38,40 @@ function renderLog() {
   const root = element('log');
   const scrollTop = root.scrollTop;
   const fragment = document.createDocumentFragment();
-  for (const entry of entries) {
-    if (element('log-filter').value !== 'all' && element('log-filter').value !== entry.direction) continue;
+  const query = element('command-filter').value.toLowerCase();
+  const matches = entries.filter(entry => (element('log-filter').value === 'all' || element('log-filter').value === entry.direction) && `${entry.command || ''} ${entry.characteristic || ''} ${entry.hex || ''} ${entry.message}`.toLowerCase().includes(query));
+  for (const entry of matches.slice(-500)) {
     const row = document.createElement('div');
     row.className = 'log-row';
     row.dataset.direction = entry.direction;
-    for (const [className, text] of [['log-time', entry.time.slice(11,23)], ['log-direction', entry.direction], ['log-message', entry.message]]) {
+    for (const [className, text] of [['log-time', new Date(entry.time).toISOString().slice(11,23)], ['log-direction', entry.direction], ['log-message', [entry.command,entry.message].filter(Boolean).join('\n')]]) {
       const cell = document.createElement('span');
       cell.className = className;
       cell.textContent = text;
+      if (className === 'log-message' && entry.characteristic) {
+        const characteristic = document.createElement('small');
+        characteristic.textContent = entry.characteristic;
+        cell.append(characteristic);
+      }
       row.append(cell);
     }
+    const copy = document.createElement('button');
+    copy.className = 'log-copy'; copy.textContent = 'Copy'; copy.setAttribute('aria-label','Copy event');
+    copy.addEventListener('click',async () => {
+      try { await navigator.clipboard.writeText(JSON.stringify(entry,null,2)); copy.textContent = 'Copied'; }
+      catch { report('Clipboard unavailable. Export the session to copy this event.',true); }
+    });
+    row.append(copy);
     fragment.append(row);
   }
   root.replaceChildren(fragment);
   root.scrollTop = element('autoscroll').checked ? root.scrollHeight : scrollTop;
-  element('log-count').textContent = entries.length;
+  element('log-count').textContent = `${entries.length}${droppedEntries ? ` · ${droppedEntries} older dropped` : ''}`;
 }
 
 function log(message, direction = 'SYS', extra = {}) {
   entries.push({ time: new Date().toISOString(), direction, message, ...extra });
-  if (entries.length > 500) entries.shift();
+  if (entries.length > MAX_ENTRIES) { entries.shift(); droppedEntries++; }
   if (!logRenderPending) { logRenderPending = true; requestAnimationFrame(renderLog); }
 }
 
@@ -85,6 +105,10 @@ function updateControls() {
   element('raw-send').disabled = busy || !connected;
   element('upload').disabled = busy || !connected || !selectedDial || !element('dial-confirm').checked || !element('begin-preset').value;
   element('cancel-upload').disabled = !uploading;
+  element('download-transfer-preview').disabled = busy || !selectedDial || !element('begin-preset').value;
+  element('inspect-ota').disabled = busy || !connected;
+  element('import-log').disabled = busy;
+  document.querySelectorAll('.lab-send').forEach(button => { button.disabled = busy; });
   for (const id of ['dial-file', 'begin-preset', 'begin-hex', 'dial-confirm', 'show-all']) element(id).disabled = busy;
 }
 
@@ -98,6 +122,9 @@ async function action(operation) {
 }
 
 function resetLive() {
+  element('known-device').textContent = knownDevice({});
+  element('ota-status').textContent = 'Not inspected. Authentication: unknown / not attempted.';
+  document.querySelectorAll('[data-lab-result]').forEach(item => { item.textContent = 'State unknown · no current-session readback.'; });
   infoRows(element('device-info'), DEVICE_FIELDS.map(([name]) => [name, '—']));
   element('battery-value').textContent = '—';
   element('battery-fill').style.width = '0%';
@@ -106,11 +133,21 @@ function resetLive() {
   document.querySelectorAll('[data-setting]').forEach(button => button.classList.remove('selected'));
 }
 
+function showSentState(name, parameters) {
+  const label = parameters.enabled === undefined ? 'Command sent' : `${parameters.enabled ? 'On / start' : 'Off / stop'} sent`;
+  const labResult = document.querySelector(`[data-lab-result][data-command="${name}"]`);
+  if (labResult) labResult.textContent = `${label} · not read back.`;
+  if (!['wake','vibration'].includes(name) || parameters.enabled === undefined) return;
+  element(`${name}-state`).textContent = `${parameters.enabled ? 'On' : 'Off'} sent · not read back`;
+  document.querySelectorAll(`[data-setting="${name}"]`).forEach(item => item.classList.toggle('selected',item.dataset.value === String(parameters.enabled)));
+}
+
 async function refresh(subscribe = false) {
   const currentSession = session;
   const info = await transport.readInfo();
   if (currentSession !== session || !transport.connected) return;
   infoRows(element('device-info'), Object.entries(info));
+  element('known-device').textContent = knownDevice(info);
   log('Device Information read complete; absent characteristics marked unavailable.');
   if (info.Hardware !== 'Unavailable' && info.Hardware !== 'LJ737_MB_V1.5') report(`Hardware differs from capture: ${info.Hardware}. Verify device identity before writes.`, true);
   try { await transport.readBattery(subscribe); }
@@ -124,6 +161,8 @@ function review(title, description, bytes, bluetoothWrite = true) {
   element('review-bytes').textContent = bytes;
   element('review-destination').hidden = !bluetoothWrite;
   element('review-confirm').textContent = bluetoothWrite ? 'Confirm & send' : 'Confirm & extract';
+  element('review-confirm').disabled = bluetoothWrite && !transport.connected;
+  if (bluetoothWrite && !transport.connected) element('review-description').textContent += '\nPreview only: connect your watch to send.';
   dialog.returnValue = 'cancel';
   return new Promise(resolve => {
     dialog.addEventListener('close', () => resolve(dialog.returnValue === 'confirm'), { once: true });
@@ -157,7 +196,7 @@ async function selectDial(bytes, name) {
   report('File inspected. Size and signature are format hints, not proof of compatibility.');
 }
 
-const titles = { device: 'Device overview', dials: 'Watchface workbench', console: 'Command console', ota: 'Firmware interface' };
+const titles = { device: 'Device overview', lab: 'Device Lab', dials: 'Watchface workbench', console: 'Command console', ota: 'Firmware interface' };
 document.querySelectorAll('[data-panel]').forEach(button => button.addEventListener('click', () => {
   document.querySelectorAll('[data-panel]').forEach(item => {
     item.classList.toggle('active', item === button);
@@ -171,7 +210,10 @@ document.querySelectorAll('[data-panel]').forEach(button => button.addEventListe
   element('page-title').append(period);
 }));
 
-transport.addEventListener('packet', event => log(hex(event.bytes), event.direction, { characteristic: event.characteristic }));
+transport.addEventListener('packet', event => {
+  const command = event.direction === 'TX' ? decodePacket(event.commandPacket || event.bytes) : rxStream.push(event.bytes).map(decodePacket).join(' / ') || 'Fragment / awaiting complete frame';
+  log(hex(event.bytes),event.direction,{characteristic:event.characteristic,hex:hex(event.bytes),command});
+});
 transport.addEventListener('notice', event => log(event.message));
 transport.addEventListener('connected', event => {
   session++;
@@ -184,6 +226,7 @@ transport.addEventListener('connected', event => {
   updateControls();
 });
 transport.addEventListener('disconnected', () => {
+  rxStream = new FrameStream();
   session++;
   resetLive();
   element('connection-badge').classList.remove('online');
@@ -209,22 +252,20 @@ element('refresh').addEventListener('click', () => action(() => refresh()));
 document.querySelectorAll('[data-setting]').forEach(button => button.addEventListener('click', () => action(async () => {
   const name = button.dataset.setting;
   const enabled = button.dataset.value === 'true';
+  if (!await review(`${COMMANDS[name].name} · Safe`,`${enabled ? 'On / start' : 'Off / stop'} requested. ${COMMANDS[name].note}`,hex(settings(name,enabled)))) return;
   await protocol.set(name, enabled);
-  if (name !== 'find') {
-    element(`${name}-state`).textContent = `${enabled ? 'On' : 'Off'} sent · not read back`;
-    document.querySelectorAll(`[data-setting="${name}"]`).forEach(item => item.classList.toggle('selected', item === button));
-  }
+  showSentState(name,{enabled});
   report(`${name === 'find' ? 'Find-watch' : name === 'wake' ? 'Raise-to-wake' : 'Vibration'} command sent. Verify the response on the watch.`);
 })));
 
 element('raw-hex').addEventListener('input', () => {
-  try { element('raw-size').textContent = `${parseHex(element('raw-hex').value).length} bytes`; }
+  try { const bytes = parseHex(element('raw-hex').value); element('raw-size').textContent = `${bytes.length} bytes`; element('raw-interpretation').textContent = `${decodePacket(bytes)} · ${bytes.length} bytes · arbitrary packet requires confirmation.`; }
   catch { element('raw-size').textContent = element('raw-hex').value.trim() ? 'Invalid hex' : '0 bytes'; }
 });
 element('raw-send').addEventListener('click', () => action(async () => {
   const bytes = parseHex(element('raw-hex').value);
   if (bytes.length > 512) throw new Error('Raw commands are limited to 512 bytes.');
-  if (!await review('Send raw packet?', `${bytes.length} bytes will be sent to ${transport.device?.name || 'the connected watch'}. Review every byte; raw commands bypass the safe controls.`, hex(bytes))) return;
+  if (!await review('Send arbitrary packet? · Experimental', `${decodePacket(bytes)} · ${bytes.length} bytes will be sent to ${transport.device?.name || 'the connected watch'}. Review every byte; raw commands bypass the guided controls.`, hex(bytes))) return;
   await protocol.raw(bytes, true);
   report('Raw packet sent. Watch acceptance is not implied.');
 }));
@@ -260,13 +301,14 @@ element('upload').addEventListener('click', () => action(async () => {
   const dial = selectedDial;
   const metadata = parseHex(element('begin-preset').value === 'manual' ? element('begin-hex').value : element('begin-preset').value);
   if (metadata.length !== 5) throw new Error('Enter exactly five transfer-start metadata bytes.');
-  if (!await review('Upload this watchface?', `${dial.name} · ${dial.bytes.length.toLocaleString()} bytes. This may replace a watchface. Keep the watch nearby, close FitPro, and leave this page visible.`, `BEGIN: ${hex(frame(0x1f, 2, metadata))}\n${dial.details.chunks} chunks; 20-byte GATT writes\nSHA-256: ${dial.hash}`)) return;
+  const preview = transferPreview(dial.bytes,metadata);
+  if (!await review('Upload this watchface? · Experimental', `${dial.name}\n${preview.summary}\nSHA-256: ${dial.hash}\nEvery outgoing frame is listed below; each is split into 20-byte GATT writes. This may replace a watchface. Keep this page visible.`, preview.manifest)) return;
   uploading = true;
   updateControls();
   try {
     await protocol.upload(dial.bytes, metadata, (sent, total, status) => {
       element('upload-progress').value = sent / total * 100;
-      element('upload-status').textContent = `${status} · ${sent.toLocaleString()} / ${total.toLocaleString()} bytes`;
+      element('upload-status').textContent = `${status} · ${Math.ceil(sent/200)} / ${preview.chunks} chunks · ${sent.toLocaleString()} / ${total.toLocaleString()} bytes`;
     });
     report('The watch acknowledged all chunks and confirmed transfer completion. Check the watch display.');
   } catch (error) {
@@ -275,14 +317,42 @@ element('upload').addEventListener('click', () => action(async () => {
   }
 }));
 element('cancel-upload').addEventListener('click', () => protocol.cancel());
+element('download-transfer-preview').addEventListener('click',() => {
+  try {
+    if (!selectedDial) throw new Error('Select a dial first.');
+    const metadata = parseHex(element('begin-preset').value === 'manual' ? element('begin-hex').value : element('begin-preset').value);
+    const preview = transferPreview(selectedDial.bytes,metadata);
+    download(`${preview.summary}\nSHA-256: ${selectedDial.hash}\n${preview.manifest}`,'lj737-transfer-preview.txt');
+  } catch (error) { report(error.message,true); }
+});
+element('inspect-ota').addEventListener('click',() => action(async () => {
+  element('ota-status').textContent = 'Inspecting AE00 characteristic properties… Authentication not attempted.';
+  try { const result = await transport.inspectOTA(); element('ota-status').textContent = Object.entries(result).map(([name,value]) => `${name}: ${value}`).join('\n'); }
+  catch (error) { element('ota-status').textContent = `Inspection unavailable: ${error.message}\nAuthentication: unknown / not attempted. Flashing: disabled.`; throw error; }
+}));
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && uploading) protocol.cancel('Page hidden; transfer cancelled. Keep the page visible for uploads.');
 });
 
 element('log-filter').addEventListener('change', renderLog);
-element('clear-log').addEventListener('click', () => { entries.length = 0; renderLog(); });
-element('export-log').addEventListener('click', () => download(JSON.stringify({ format: 'lj737-log-v1', timestamps: 'UTC', exportedAt: new Date().toISOString(), entries }, null, 2), 'lj737-session.json', 'application/json'));
+element('command-filter').addEventListener('input',renderLog);
+element('clear-log').addEventListener('click', () => { entries.length = 0; droppedEntries = 0; renderLog(); });
+element('export-log').addEventListener('click', () => download(exportSession(entries,'json'),'lj737-session.json','application/json'));
+element('export-csv').addEventListener('click', () => download(exportSession(entries,'csv'),'lj737-session.csv','text/csv'));
+element('import-log').addEventListener('change',async event => {
+  const file = event.target.files[0];
+  if (!file) return;
+  try {
+    if (file.size > 32*1024*1024) throw new Error('Session exceeds 32 MiB.');
+    const imported = importSession(await file.text(),file.name.toLowerCase().endsWith('.csv') ? 'csv' : 'json');
+    if (busy) throw new Error('Wait for the current device operation before importing.');
+    if (!confirm(`Replace the activity log with ${imported.length} imported events? This does not send any packets.`)) return;
+    entries.splice(0,entries.length,...imported); droppedEntries = 0; renderLog();
+  } catch (error) { report(error.message,true); }
+  finally { event.target.value = ''; }
+});
 
+setupLab({action,review,protocol,report,onSent:showSentState});
 setupBuilder({ selectDial, download, report });
 resetLive();
 updateControls();

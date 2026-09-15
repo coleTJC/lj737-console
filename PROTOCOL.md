@@ -37,6 +37,21 @@ Vibration ON:      CD 00 09 12 01 08 00 04 01 00 00 00
 Find watch:       CD 00 06 12 01 0B 00 01 01
 ```
 
+Additional captured/mapped Device Lab commands:
+
+| Function | Group / sub | Captured or mapped payload | Confidence |
+| --- | --- | --- | --- |
+| Notification/SMS off | `12 / 07` | Twelve zero bytes | Payload captured; SMS byte/bit position unconfirmed |
+| Alarm add/set | `12 / 02` | `6A 5E C7 88 1F` | Five bytes captured; time/day/slot packing unconfirmed |
+| Alarm delete | `12 / 02` | Empty | Captured; may clear all alarms |
+| Sedentary enable | `12 / 05` | `00 01 00 96 04 08 16 7F` | Enable byte confirmed by paired capture; other fields unconfirmed |
+| Sedentary disable | `12 / 05` | `00 00 00 96 04 08 16 7F` | Captured |
+| Camera enter / exit | `12 / 0C` | `01` / `00` | Captured |
+| Heart start / stop | `12 / 18` | `01` / `00` | Mapped; hardware response unverified |
+| ECG start / stop | `12 / 1A` | `01` / `00` | Mapped; sensor/response unverified |
+
+The Device Lab exposes unknown payload fields as raw decimal bytes and shows the complete generated frame before sending. It deliberately does not label alarm/reminder/category bytes with guessed semantics.
+
 ## Dial transfer evidence
 
 The attached `LJ737-bugreport2.zip` → `FS/data/log/bt/btsnoop_hci.log` was re-read during this build. Reconstructed TX frames were sequential; every recovered per-chunk checksum and finish length/checksum matched. No transfer packets use AE01 or 4A02.

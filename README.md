@@ -1,6 +1,6 @@
-# LJ737 Field Console
+# LJ737 Device Lab
 
-A mobile-first, local-first development console for **MOVEMENT / LJ737_MB_V1.5 / V27094**. Plain HTML, CSS and JavaScript; no runtime dependencies, account, build step, or backend.
+A mobile-first, local-first development console for **MOVEMENT / LJ737(D) / LJ737_MB_V1.5 / V27094**. Plain HTML, CSS and JavaScript; no runtime dependencies, account, build step, or backend.
 
 ## Start on a computer
 
@@ -26,7 +26,7 @@ No deployment was performed for you. See [GitHub's Pages quickstart](https://doc
 1. Open the HTTPS Pages URL directly in **Chrome for Android**, not an in-app browser. Turn on Bluetooth and grant Chrome the Bluetooth / nearby-device permissions requested by Android. Some versions may also need location permission or location services for scanning.
 2. Disconnect or close FitPro/OlyWear and any other app connected to the watch.
 3. Tap **Connect watch**, select **MOVEMENT** or **Movement**, and wait for identity and battery reads. Enable **Show all nearby BLE devices** if its advertised name differs.
-4. Use explicit **On / Off** controls or **Ping**. Toggle state starts unknown; “sent” means Bluetooth delivered the write, not that a setting was read back.
+4. Open **Device Lab**. Every command has a live Packet Preview and human-readable interpretation. Review the exact bytes before sending. A “sent” state only means Bluetooth delivered the write; settings are not read back.
 5. Keep the page visible and phone awake during dial uploads. Backgrounding cancels a transfer. Reconnect after a cancelled or failed upload; no automatic resume or retries.
 
 | Browser | Notes |
@@ -41,26 +41,39 @@ HTTPS or localhost is required. A phone visiting a computer's plain `http://192.
 
 ## Watchface workflow
 
-**Captured .bin:** Choose the file in Watchfaces. Review size, header, SHA-256, additive checksum and chunk count. Choose the start metadata matching its capture, check the compatibility acknowledgement, then **Review upload** and confirm. Signature and size are hints, not a full file validator. Ordinary AA55 containers are inspected but their widgets/palettes are not rendered.
+**Captured .bin:** Choose the file in Watchfaces. Review size, header, SHA-256, additive checksum and chunk count. Choose the start metadata matching its capture, check the compatibility acknowledgement, then **Review upload** and confirm. The review lists the exact begin, chunk, status-acknowledgement and finish frames. **Download packet preview** saves the same manifest without sending. Signature and size are hints, not a full compatibility validator. Ordinary AA55 containers are inspected but their widgets/palettes are not rendered.
 
 **Custom background:** Supply an image plus an **exactly 3,267-byte prefix** from your known-compatible custom dial. Choose center crop, fit with black edges, or stretch. The builder appends 240 × 286 big-endian RGB565 pixels without changing one byte of the prefix: **3,267 + 137,280 = 140,547 bytes**. Download the result or inspect it for upload. No templates are invented or bundled. The inspector can extract the prefix from a separately verified 140,547-byte custom dial. The preview shows the quantized background only, not the template's clock/date overlays. PNG/JPEG/WebP/BMP decoding and EXIF orientation follow the browser; transparent areas are composited onto black.
 
 **Transfer:** Five-byte metadata presets are captured stock `00 00 FF FF FF`, custom #1 `01 01 FF FF FF`, and custom #2 `04 01 FF FF FF`. Their precise slot/style meanings remain uncertain. Upload uses 200-byte file chunks fragmented into serialized 20-byte GATT writes, with a status acknowledgement per chunk. The eight-second wait timeout stops the transfer; cancellation/timeout/failure disconnects to prevent further transfer traffic. No unknown abort command is invented. The watch may remain in its transfer screen until its own timeout.
 
+## Device Lab
+
+- **Safe:** raise-to-wake, vibration, find-watch, camera mode, heart measurement and ECG. Raise-to-wake is hardware-confirmed; the remaining mapped controls still need watch-side verification where the UI says so.
+- **Experimental:** notifications/SMS, alarm, sedentary reminder and watchface transfer. Captured bytes are prefilled. Undecoded fields stay labeled as unconfirmed decimal bytes; the app does not invent hour/day/category meanings.
+- **Dangerous:** JieLi OTA. The app can inspect `AE00`, `AE01` and `AE02` characteristic properties. It does not subscribe, authenticate or write to OTA characteristics, and firmware flashing remains unavailable.
+- **Raw Lab:** build a framed command from group, subcommand and payload, or edit a complete packet. Every arbitrary packet requires a fresh confirmation.
+- **Protocol Reference:** generated from the same command registry used by the controls and decoder, preventing separate hard-coded tables from drifting.
+
+## Activity logs
+
+The activity stream records UTC timestamp, TX/RX/SYS direction, characteristic UUID, exact GATT-fragment hex, decoded command name when known, and system text. Filter by direction or search command/UUID/hex, copy one event, and export/import JSON or CSV entirely in the browser. The session retains up to 50,000 events and renders the last 500 matches. Imported files replace the current log only after confirmation. Review exported device data before sharing it.
+
 ## Scope and architecture
 
 ```text
-index.html + style.css + js/app.js + js/builder-ui.js  (UI)
+index.html + style.css + lab.css
+js/app.js + js/lab-ui.js + js/builder-ui.js           (UI)
                          ↓
-js/protocol.js + js/watchface.js                      (LJ737 / binary logic)
+js/commands.js + js/protocol.js + js/watchface.js     (command registry / binary logic)
+js/session.js + js/transfer-preview.js                (logs / transfer validation)
                          ↓
-js/transport.js                                      (Web Bluetooth GATT)
+js/transport.js                                       (Web Bluetooth GATT)
 ```
 
 - Live reads: manufacturer, model, serial, firmware, hardware, software, System ID, IEEE certification bytes, PnP ID, battery. Missing fields show unavailable. Captured board/firmware labels are separate from live values.
-- Safe controls use exact captured vibration / raise-to-wake / find packets. Raw hex permits at most 512 bytes on normal `6E400002` only and requires a fresh confirmation for every send.
-- The log retains the last 500 events in memory, with UTC timestamps, filtering, clear and JSON export. Reload clears all state. Exported logs may contain device data; review before sharing.
-- The OTA tab is a captured reference only. AE00/AE01/AE02 are never requested, subscribed, or written. Firmware flashing is absent.
+- Guided and raw command sends use the normal `6E400002…CCA9D` write characteristic and require a visible packet review. Raw frames are limited to 512 bytes.
+- The optional-service permission list includes `AE00` so the OTA tab can inspect characteristic properties after connection. No OTA values are read and no OTA characteristic is written or subscribed.
 - No analytics, network uploads, cloud storage, remote fonts, RSSI claim, or raw HCI access. A network is needed to initially load the hosted page; this is not an installable offline PWA.
 
 ## Verification and limitations
@@ -69,12 +82,12 @@ js/transport.js                                      (Web Bluetooth GATT)
 npm test
 ```
 
-All **16 Node tests passed**, covering literal captured commands, chunk checksums, framing, RGB565/prefix preservation, ACK sequencing, timeout/cancellation, and serialized Bluetooth writes using a fake GATT boundary. This environment blocks child-process creation, so verification used Node.js 24's single-process runner entirely inside the sandbox:
+The automated tests cover literal captured commands, byte validation, SMS bit editing, packet decoding, JSON/CSV round trips, spreadsheet-safe CSV output, transfer manifests, chunk/finish checksums, RGB565/prefix preservation, ACK sequencing, timeout/cancellation, serialized Bluetooth writes, and read-only OTA-property inspection using a fake GATT boundary.
 
 ```sh
 node --test --test-isolation=none
 ```
 
-JavaScript syntax checks passed. Browser checks verified initial disconnected state, desktop and 390px layouts, captured-file inspection (140,547 bytes / 703 chunks), wrong-size prefix rejection, building and inspecting a 140,547-byte custom file, raw hex validation, and disabled OTA controls. Physical Bluetooth operations, on-watch image appearance, Android hardware behavior and raw-send confirmation while connected still require testing with the watch.
+Physical Bluetooth operations beyond the user-confirmed connection, device reads, battery display and raise-to-wake control still require testing with the watch. In particular, alarms, reminder fields, SMS position/bit, measurement responses, watchface installation, Android layout on hardware and OTA service availability remain device-side checks.
 
 Detailed captured bytes, corrections and evidence: [PROTOCOL.md](PROTOCOL.md).

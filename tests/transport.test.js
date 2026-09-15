@@ -48,3 +48,20 @@ test('stalled GATT write disconnects and discards remaining fragments', async ()
   await assert.rejects(transport.write(new Uint8Array(40)), /timed out/);
   assert.equal(transport.connected, false);
 });
+
+test('OTA inspection discovers properties without reading or writing characteristic values', async () => {
+  const transport = connectedTransport(() => assert.fail('No writes during inspection'));
+  const requested = [];
+  transport.server.getPrimaryService = async uuid => {
+    assert.equal(uuid,0xae00);
+    return {getCharacteristic:async characteristic => {
+      requested.push(characteristic);
+      return {properties:{writeWithoutResponse:characteristic===0xae01,notify:characteristic===0xae02},readValue:() => assert.fail('No characteristic reads'),writeValueWithoutResponse:() => assert.fail('No OTA writes')};
+    }};
+  };
+  const info = await transport.inspectOTA();
+  assert.deepEqual(requested,[0xae01,0xae02]);
+  assert.equal(info.AE01,'writeWithoutResponse');
+  assert.equal(info.AE02,'notify');
+  assert.equal(info.Authentication,'Unknown / not attempted');
+});

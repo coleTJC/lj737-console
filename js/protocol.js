@@ -1,3 +1,4 @@
+import { COMMANDS, commandPayload, byte } from './commands.js';
 export const hex = bytes => Array.from(bytes, value => value.toString(16).padStart(2, '0')).join(' ').toUpperCase();
 
 export function parseHex(text) {
@@ -8,6 +9,9 @@ export function parseHex(text) {
 }
 
 export function frame(group, subcommand, payload = new Uint8Array()) {
+  byte(group, 'Group');
+  byte(subcommand, 'Subcommand');
+  if (!(payload instanceof Uint8Array)) throw new Error('Payload must be bytes.');
   if (payload.length > 65530) throw new Error('Payload too large.');
   const packet = new Uint8Array(payload.length + 8);
   const view = new DataView(packet.buffer);
@@ -19,12 +23,8 @@ export function frame(group, subcommand, payload = new Uint8Array()) {
 }
 
 export function settings(name, enabled) {
-  if (typeof enabled !== 'boolean') throw new Error('State must be boolean.');
-  const state = Number(enabled);
-  if (name === 'wake') return frame(0x12, 9, Uint8Array.of(state, 1, 0xe0, 5, 0x28));
-  if (name === 'vibration') return frame(0x12, 8, Uint8Array.of(state, 0, 0, 0));
-  if (name === 'find') return frame(0x12, 0x0b, Uint8Array.of(state));
-  throw new Error('Unsupported safe control.');
+  if (!['wake','vibration','find','camera','heart','ecg'].includes(name)) throw new Error('Unsupported safe control.');
+  return frame(COMMANDS[name].group, COMMANDS[name].sub, commandPayload(name, { enabled }));
 }
 
 export function chunkFrame(sequence, data) {
@@ -34,7 +34,7 @@ export function chunkFrame(sequence, data) {
   view.setUint16(0, sequence);
   payload.set(data, 2);
   view.setUint16(payload.length - 2, payload.reduce((sum, byte) => sum + byte, 0) & 0xffff);
-  return frame(0x1f, 1, payload);
+  return frame(COMMANDS.dialChunk.group, COMMANDS.dialChunk.sub, payload);
 }
 
 export function finishFrame(data) {
@@ -42,7 +42,7 @@ export function finishFrame(data) {
   const view = new DataView(payload.buffer);
   view.setUint32(0, data.length);
   view.setUint32(4, data.reduce((sum, byte) => (sum + byte) >>> 0, 0));
-  return frame(0x1f, 3, payload);
+  return frame(COMMANDS.dialFinish.group, COMMANDS.dialFinish.sub, payload);
 }
 
 export class FrameStream {
@@ -147,7 +147,7 @@ export class LJ737 extends EventTarget {
       const signal = this.controller.signal;
       try {
         onProgress(0, bytes.length, 'Waiting for watch');
-        await this.exchange(frame(0x1f, 2, beginPayload), 1000, signal);
+        await this.exchange(frame(COMMANDS.dialBegin.group, COMMANDS.dialBegin.sub, beginPayload), 1000, signal);
         for (let offset = 0, sequence = 1; offset < bytes.length; offset += 200, sequence++) {
           const chunk = bytes.slice(offset, offset + 200);
           await this.exchange(chunkFrame(sequence, chunk), 1000 + sequence, signal);
