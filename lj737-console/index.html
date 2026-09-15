@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111715">
+  <meta name="description" content="A local-first Web Bluetooth development console for MOVEMENT LJ737 watches.">
+  <title>LJ737 / Field Console</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111715'/%3E%3Cpath d='M8 9v14h14M14 9h10v8' fill='none' stroke='%23beef82' stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#workspace">Skip to workspace</a>
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="LJ737 Field Console home"><span class="brand-mark">LJ<span>↗</span></span><span>LJ737 <span class="brand-muted">/ FIELD CONSOLE</span></span></a>
+    <span class="version">LOCAL FIRST <span class="dot"></span> V1.0</span>
+  </header>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="sidebar-top"><span class="eyebrow">WORKSPACE 01</span><span class="side-title">Watch lab<span class="mint">.</span></span></div>
+      <nav aria-label="Workspace sections">
+        <button class="nav-item active" data-panel="device" aria-current="page"><span class="nav-icon">⌁</span> Device <span class="nav-index">01</span></button>
+        <button class="nav-item" data-panel="dials"><span class="nav-icon">▧</span> Watchfaces <span class="nav-index">02</span></button>
+        <button class="nav-item" data-panel="console"><span class="nav-icon">›_</span> Console <span class="nav-index">03</span></button>
+        <button class="nav-item" data-panel="ota"><span class="nav-icon">⇡</span> OTA <span class="nav-index">LOCKED</span></button>
+      </nav>
+      <div class="side-foot"><span class="tiny-label">TRANSPORT</span><p>Web Bluetooth<br><span class="muted">GATT · browser → watch</span></p><div class="signal-lines"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><span class="tiny-label">NO CLOUD. JUST YOUR WATCH.</span></div>
+    </aside>
+    <main id="workspace">
+      <div class="workspace-heading"><div><p class="eyebrow">MOVEMENT / LJ737</p><h1 id="page-title">Device overview<span class="mint">.</span></h1></div><span id="connection-badge" class="status-pill"><span class="dot"></span> DISCONNECTED</span></div>
+      <div id="compatibility" class="compatibility" role="status">Checking browser capabilities…</div>
+      <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+
+      <section id="panel-device" class="panel" aria-label="Device overview">
+        <div class="overview-grid">
+          <article class="card device-card">
+            <div class="card-top"><span class="eyebrow">01 / TARGET DEVICE</span><span class="chip">BLE</span></div>
+            <div class="device-intro"><div><h2 id="device-name">MOVEMENT</h2><p id="device-description">Your watch. Your workbench.</p><p class="muted">Connect to read live identity and battery.</p></div><div class="watch-outline" aria-hidden="true"><div class="watch-screen"><span>FIELD</span><strong>00<span>:00</span></strong><div class="watch-grid"></div><span>LJ737 / STANDBY</span></div></div></div>
+            <div class="device-actions"><button id="connect" class="primary">Connect watch <span>↗</span></button><button id="disconnect" disabled>Disconnect</button></div>
+            <label class="check-label"><input id="show-all" type="checkbox"> Show all nearby BLE devices in picker</label>
+            <div class="card-bottom"><span class="dot"></span> <span id="connection-note">Awaiting a secure Bluetooth connection</span></div>
+          </article>
+          <div class="metrics">
+            <article class="card battery-card"><div class="card-top"><span class="eyebrow">BATTERY / LIVE</span><span aria-hidden="true">▰</span></div><div class="metric-value"><span id="battery-value">—</span><small>%</small></div><div class="battery-track"><div id="battery-fill"></div></div><span id="battery-note" class="muted">Read after connecting</span></article>
+            <article class="card display-card"><span class="eyebrow">DISPLAY / CAPTURED</span><div class="display-value">240 <span>×</span> 286</div><span class="muted">RGB565 · 16 bits per pixel</span></article>
+          </div>
+        </div>
+        <div class="lower-grid">
+          <article class="card"><div class="card-top"><div><span class="eyebrow">DEVICE INFORMATION</span><h3>Identity & revisions</h3></div><button id="refresh" class="small" disabled>↻ Refresh</button></div><p class="reference-note">Capture reference: <code>LJ737_MB_V1.5</code> · <code>V27094</code><br>Values below come from this connection.</p><dl id="device-info" class="info-list"></dl></article>
+          <article class="card"><div class="card-top"><div><span class="eyebrow">CAPTURED COMMANDS</span><h3>Quick controls</h3></div><span class="chip mint">0x12</span></div><p class="muted compact">Settings are not read back. Choose an explicit state to send.</p>
+            <fieldset id="safe-controls" disabled>
+              <div class="control-row"><div><strong>Vibration</strong><small>Haptic feedback · 0x08</small><span id="vibration-state" class="command-state">State unknown</span></div><div class="segmented"><button data-setting="vibration" data-value="false" aria-label="Turn vibration off">Off</button><button data-setting="vibration" data-value="true" aria-label="Turn vibration on">On</button></div></div>
+              <div class="control-row"><div><strong>Raise to wake</strong><small>Wrist activation · 0x09</small><span id="wake-state" class="command-state">State unknown</span></div><div class="segmented"><button data-setting="wake" data-value="false" aria-label="Turn raise to wake off">Off</button><button data-setting="wake" data-value="true" aria-label="Turn raise to wake on">On</button></div></div>
+              <div class="control-row"><div><strong>Find watch</strong><small>Locate nearby device · 0x0B</small></div><button data-setting="find" data-value="true">Ping ↗</button></div>
+            </fieldset>
+            <p class="footnote">Raise-to-wake preserves the captured schedule bytes <code>01 E0 05 28</code>. A sent command is not a confirmed setting change.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="panel-dials" class="panel" aria-label="Watchface workbench" hidden>
+        <div class="section-intro"><p>Inspect a captured dial or build a new background.<br><span class="muted">Files and photos stay in this browser.</span></p><span class="chip">240 × 286 / RGB565 BE</span></div>
+        <div class="lower-grid dial-grid">
+          <article class="card"><div class="card-top"><div><span class="eyebrow">01 / CAPTURED FILE</span><h3>Inspect & transfer</h3></div><span class="nav-icon">▧</span></div>
+            <label class="file-zone">Choose a watchface .bin<span>Captured assets · up to 4 MiB</span><input id="dial-file" type="file" accept=".bin,application/octet-stream"></label>
+            <div id="dial-inspection" hidden><h4 id="dial-name"></h4><dl id="dial-details" class="info-list"></dl><details><summary>Header bytes & SHA-256</summary><pre id="dial-header"></pre><p id="dial-hash" class="hash"></p></details><button id="extract-prefix" class="small" hidden>Extract 3,267-byte prefix</button></div>
+            <div class="divider"></div><label for="begin-preset">Transfer-start metadata</label><select id="begin-preset"><option value="">Select the matching capture…</option><option value="00 00 FF FF FF">Captured stock dial · 00 00 FF FF FF</option><option value="01 01 FF FF FF">Captured custom #1 · 01 01 FF FF FF</option><option value="04 01 FF FF FF">Captured custom #2 · 04 01 FF FF FF</option><option value="manual">Enter five captured bytes…</option></select><input id="begin-hex" class="mono" placeholder="00 00 FF FF FF" aria-label="Five transfer-start metadata bytes" maxlength="40" hidden>
+            <p class="footnote">These bytes select a style/slot. Use the metadata from your matching capture; its exact meaning is not fully decoded.</p>
+            <label class="check-label"><input id="dial-confirm" type="checkbox"> I verified this file and metadata belong to my LJ737.</label>
+            <div class="button-row"><button id="upload" class="primary" disabled>Review upload ↗</button><button id="cancel-upload" disabled>Cancel transfer</button></div>
+            <progress id="upload-progress" max="100" value="0" aria-label="Watchface upload progress"></progress><p id="upload-status" class="footnote" role="status">No transfer running. Keep the page visible while uploading.</p>
+          </article>
+          <article class="card"><div class="card-top"><div><span class="eyebrow">02 / CUSTOM BACKGROUND</span><h3>Dial builder</h3></div><span class="chip">LOCAL</span></div>
+            <div class="builder-preview"><canvas id="image-preview" width="240" height="286" aria-label="Custom dial background preview"></canvas><div id="preview-empty"><span>+</span><p>Your next watchface<br><small>Choose an image to begin</small></p></div><span class="preview-corner">240 × 286</span></div>
+            <label class="file-label">Background image<input id="image-file" type="file" accept="image/png,image/jpeg,image/webp,image/bmp"></label>
+            <div class="two-fields"><div><label for="image-fit">Image fit</label><select id="image-fit"><option value="cover">Fill / center crop</option><option value="contain">Fit / black edges</option><option value="stretch">Stretch to display</option></select></div><div><label for="prefix-file">Template prefix</label><input id="prefix-file" type="file" accept=".bin,application/octet-stream"></div></div>
+            <p id="builder-status" class="footnote">Requires a user-supplied prefix of exactly 3,267 bytes. Preview shows the background only; template widgets are preserved, not rendered.</p>
+            <button id="build-dial" class="primary" disabled>Build .bin ↗</button><div id="builder-result" hidden><p id="built-summary" class="success-text"></p><div class="button-row"><button id="download-built">Download .bin ↓</button><button id="inspect-built">Inspect for upload ↗</button></div></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="panel-console" class="panel" aria-label="Raw command console" hidden>
+        <div class="lower-grid"><article class="card"><span class="eyebrow">MANUAL / 6E400002</span><h3>Raw command console</h3><p class="muted">Send one complete packet to the normal FitPro write characteristic. Every send requires a separate review.</p><label for="raw-hex">Packet bytes · hex</label><textarea id="raw-hex" class="mono" rows="6" placeholder="CD 00 06 12 01 0B 00 01 01" spellcheck="false" autocomplete="off"></textarea><div class="raw-meta"><span id="raw-size">0 bytes</span><span>MAX 512 BYTES</span></div><p class="footnote">This bypasses the safe controls. Incorrect commands can change device settings or enter unknown modes. OTA characteristics are not accessible here.</p><button id="raw-send" class="primary" disabled>Review packet ↗</button></article>
+          <article class="card"><span class="eyebrow">REFERENCE / CAPTURE MAPPINGS</span><h3>Known command groups</h3><div class="table-wrap"><table><thead><tr><th>Function</th><th>Group / sub</th><th>V1</th></tr></thead><tbody><tr><td>Vibration</td><td>12 / 08</td><td>Control</td></tr><tr><td>Raise to wake</td><td>12 / 09</td><td>Control</td></tr><tr><td>Find watch</td><td>12 / 0B</td><td>Control</td></tr><tr><td>Notification mask</td><td>12 / 07</td><td>Reference</td></tr><tr><td>Alarm</td><td>12 / 02</td><td>Reference</td></tr><tr><td>Sedentary reminder</td><td>12 / 05</td><td>Reference</td></tr><tr><td>Camera mode</td><td>12 / 0C</td><td>Reference</td></tr><tr><td>Heart / ECG</td><td>12 / 18, 1A</td><td>Reference</td></tr><tr><td>Watchface transfer</td><td>1F / 02, 01, 03</td><td>Uploader</td></tr></tbody></table></div><p class="footnote">Hexadecimal values. Reference entries do not imply complete payload decoding.</p></article></div>
+      </section>
+
+      <section id="panel-ota" class="panel" aria-label="Experimental OTA reference" hidden>
+        <article class="card ota-hero"><span class="eyebrow amber">EXPERIMENTAL / READ-ONLY REFERENCE</span><h2>Mapped. Not armed.</h2><p>JieLi’s OTA interface is present in the capture.<br>Firmware flashing is intentionally unavailable in version 1.</p><button disabled>Firmware flashing disabled</button></article>
+        <div class="lower-grid"><article class="card"><span class="eyebrow">JIELI / RCSP</span><h3>Discovered OTA interface</h3><dl class="info-list"><div><dt>Service</dt><dd><code>0xAE00</code></dd></div><div><dt>Host → watch</dt><dd><code>0xAE01</code> · write without response</dd></div><div><dt>Watch → host</dt><dd><code>0xAE02</code> · notify</dd></div><div><dt>Capture platform</dt><dd>7 / JieLi OTA</dd></div><div><dt>Access in this app</dt><dd>None</dd></div></dl><p class="footnote">Authentication, image validation, recovery, and firmware flashing are not implemented. This tab does not subscribe to or write OTA characteristics.</p></article>
+          <article class="card"><span class="eyebrow">GATT / CAPTURED MAP</span><h3>Other interfaces</h3><dl class="info-list"><div><dt>FitPro custom</dt><dd><code>6E400004…CCA9D</code></dd></div><div><dt>Service FEE7</dt><dd><code>FEC7 / FEC8 / FEC9</code></dd></div><div><dt>Service 3802</dt><dd><code>4A02</code></dd></div><div><dt>Device Info</dt><dd><code>180A</code></dd></div><div><dt>Battery</dt><dd><code>180F / 2A19</code></dd></div></dl><p class="footnote">Captured discovery data, not a live scan. FEC7, FEC8, FEC9, and 4A02 are characteristics. Only normal FitPro, Device Info, and Battery services are requested on connection.</p></article></div>
+      </section>
+
+      <section class="card log-card" aria-label="Live activity log"><div class="card-top"><div class="log-heading"><span class="dot"></span><h3>Activity stream</h3><span id="log-count" class="chip">0</span></div><div class="log-actions"><label class="sr-only" for="log-filter">Log filter</label><select id="log-filter"><option value="all">All events</option><option value="TX">TX packets</option><option value="RX">RX packets</option><option value="SYS">System</option></select><button id="export-log" class="small">Export ↓</button><button id="clear-log" class="small">Clear</button></div></div><div id="log" class="log" tabindex="0" aria-label="Packet log"></div><div class="log-footer"><span>RAW GATT PACKETS · LAST 500 EVENTS</span><label class="check-label"><input id="autoscroll" type="checkbox" checked> Follow</label></div></section>
+      <footer class="page-footer"><span>LJ737 FIELD CONSOLE / UNOFFICIAL DEVELOPMENT TOOL</span><a href="README.md">Setup & protocol notes ↗</a></footer>
+    </main>
+  </div>
+  <dialog id="review-dialog"><form method="dialog"><span class="eyebrow">REVIEW OPERATION</span><h2 id="review-title">Confirm operation</h2><p id="review-description"></p><pre id="review-bytes"></pre><p id="review-destination" class="footnote">Destination: normal FitPro write characteristic <code>6E400002…CCA9D</code>.</p><div class="button-row"><button value="cancel" autofocus>Cancel</button><button id="review-confirm" value="confirm" class="primary">Confirm & send</button></div></form></dialog>
+</body>
+</html>
