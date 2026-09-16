@@ -1,6 +1,6 @@
 import { BluetoothTransport, DEVICE_FIELDS } from './transport.js';
 import { LJ737, hex, parseHex, settings, FrameStream } from './protocol.js';
-import { inspectDial, sha256, PREFIX_SIZE, PIXEL_BYTES, MAX_DIAL_BYTES } from './watchface.js';
+import { inspectDial, sha256, MAX_DIAL_BYTES } from './watchface.js';
 import { setupBuilder } from './builder-ui.js';
 import { COMMANDS, decodePacket, knownDevice } from './commands.js';
 import { setupLab, prepareLabShell } from './lab-ui.js';
@@ -189,11 +189,14 @@ async function selectDial(bytes, name) {
   infoRows(element('dial-details'), [
     ['Format hint', details.kind], ['Size', `${details.size.toLocaleString()} bytes`],
     ['Transfer chunks', `${details.chunks} × up to 200 bytes`], ['Additive sum', `0x${details.sum.toString(16).padStart(8, '0').toUpperCase()}`],
+    ...(details.custom ? [['Screen', '240 × 286'], ['Framebuffer', `offset ${details.custom.framebufferOffset} (0x${details.custom.framebufferOffset.toString(16).toUpperCase()}) · RGB565 BE`], ['Glyph resources', String(details.custom.resources.length)], ['Unknown trailer', `${details.custom.trailer.length} bytes`]] : []),
   ]);
+  element('dial-format').textContent = details.custom
+    ? details.custom.resources.map((resource, index) => `#${String(index).padStart(2, '0')}  @${resource.offset} (0x${resource.offset.toString(16).toUpperCase()})  ${resource.width}×${resource.height}  ${resource.length} bytes`).join('\n') + `\nUnknown trailer: ${hex(details.custom.trailer)}`
+    : 'No custom glyph records parsed. AA55 normal-dial resource tables are not decoded.';
   element('dial-header').textContent = hex(bytes.slice(0, 64));
   element('dial-hash').textContent = `SHA-256: ${hash}`;
   element('dial-inspection').hidden = false;
-  element('extract-prefix').hidden = bytes.length !== PREFIX_SIZE + PIXEL_BYTES;
   updateControls();
   report('File inspected. Size and signature are format hints, not proof of compatibility.');
 }
@@ -293,11 +296,6 @@ element('begin-preset').addEventListener('change', () => {
 });
 element('begin-hex').addEventListener('input', () => { element('dial-confirm').checked = false; updateControls(); });
 element('dial-confirm').addEventListener('change', updateControls);
-element('extract-prefix').addEventListener('click', async () => {
-  if (!selectedDial) return;
-  const dial = selectedDial;
-  if (await review('Extract template prefix?', 'Only use this if you independently verified this 140,547-byte file uses the captured custom layout. Size alone cannot prove that.', `${dial.name}\nFirst 3,267 bytes will be copied unchanged. No Bluetooth write.`, false)) download(dial.bytes.slice(0, PREFIX_SIZE), 'lj737-template-prefix.bin', 'application/octet-stream');
-});
 element('upload').addEventListener('click', () => action(async () => {
   if (!selectedDial || !element('dial-confirm').checked) throw new Error('Inspect and verify a dial first.');
   const dial = selectedDial;

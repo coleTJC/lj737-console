@@ -43,7 +43,7 @@ HTTPS or localhost is required. A phone visiting a computer's plain `http://192.
 
 **Captured .bin:** Choose the file in Watchfaces. Review size, header, SHA-256, additive checksum and chunk count. Choose the start metadata matching its capture, check the compatibility acknowledgement, then **Review upload** and confirm. The review lists the exact begin, chunk, status-acknowledgement and finish frames. **Download packet preview** saves the same manifest without sending. Signature and size are hints, not a full compatibility validator. Ordinary AA55 containers are inspected but their widgets/palettes are not rendered.
 
-**Custom background:** Supply an image plus an **exactly 3,267-byte prefix** from your known-compatible custom dial. Choose center crop, fit with black edges, or stretch. The builder appends 240 × 286 big-endian RGB565 pixels without changing one byte of the prefix: **3,267 + 137,280 = 140,547 bytes**. Download the result or inspect it for upload. No templates are invented or bundled. The inspector can extract the prefix from a separately verified 140,547-byte custom dial. The preview shows the quantized background only, not the template's clock/date overlays. PNG/JPEG/WebP/BMP decoding and EXIF orientation follow the browser; transparent areas are composited onto black.
+**Custom background:** Choose an image, then crop, zoom and offset it. The app generates a 140,547-byte custom dial locally from 28 parsed, bundled capture-derived glyph records, a 10-byte unknown captured trailer, and a 240 × 286 RGB565 big-endian framebuffer. No separate prefix upload is needed. The actual glyphs are previewed, but their positions are illustrative: no captured custom-dial variants establish on-watch widget coordinates, visibility or clock mode. The emitted dial therefore retains the captured fixed glyph layout. Preview visibility checkboxes do not alter the .bin. Download or inspect it for a separately confirmed upload. See `docs/LJ737_WATCHFACE_FORMAT.md`.
 
 **Transfer:** Five-byte metadata presets are captured stock `00 00 FF FF FF`, custom #1 `01 01 FF FF FF`, and custom #2 `04 01 FF FF FF`. Their precise slot/style meanings remain uncertain. Upload uses 200-byte file chunks fragmented into serialized 20-byte GATT writes, with a status acknowledgement per chunk. The eight-second wait timeout stops the transfer; cancellation/timeout/failure disconnects to prevent further transfer traffic. No unknown abort command is invented. The watch may remain in its transfer screen until its own timeout.
 
@@ -83,7 +83,7 @@ js/transport.js                                       (Web Bluetooth GATT)
 npm test
 ```
 
-The automated tests cover literal captured commands, byte validation, SMS bit editing, packet decoding, JSON/CSV round trips, spreadsheet-safe CSV output, transfer manifests, chunk/finish checksums, RGB565/prefix preservation, ACK sequencing, timeout/cancellation, serialized Bluetooth writes, and read-only OTA-property inspection using a fake GATT boundary.
+The automated tests cover literal captured commands, byte validation, SMS bit editing, packet decoding, JSON/CSV round trips, spreadsheet-safe CSV output, transfer manifests, chunk/finish checksums, RGB565 and glyph serialization, ACK sequencing, timeout/cancellation, serialized Bluetooth writes, and read-only OTA-property inspection using a fake GATT boundary.
 
 ```sh
 node --test --test-isolation=none
