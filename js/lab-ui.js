@@ -1,4 +1,4 @@
-import { COMMANDS, commandPayload } from './commands.js';
+import { COMMANDS, QUICK_CONTROLS, commandPayload } from './commands.js';
 import { frame, hex, parseHex } from './protocol.js';
 
 const node = (tag, text, className) => {
@@ -35,7 +35,8 @@ export function prepareLabShell() {
   const oldReference = document.querySelector('#panel-console table').closest('article');
   const link = node('button','Open Protocol Reference ↗');
   link.addEventListener('click',() => { document.querySelector('[data-panel="lab"]').click(); document.getElementById('protocol-reference').scrollIntoView({block:'start'}); });
-  oldReference.replaceChildren(node('h3','Protocol Reference'),node('p','All command cards and protocol rows use one shared command registry.','footnote'),link);
+  const quick = node('div','','quick-controls'); quick.id = 'quick-controls';
+  oldReference.replaceChildren(node('span','REFERENCE / CAPTURE MAPPINGS','eyebrow'),node('h3','Known command groups'),node('p','Compact controls use the same packet previews and confirmation dialog as Device Lab. *SMS-on byte/bit mapping remains unconfirmed.','footnote'),quick,link);
   const actions = document.querySelector('.log-actions');
   const filter = node('input'); filter.id = 'command-filter'; filter.type = 'search'; filter.placeholder = 'Filter command / characteristic / hex'; filter.setAttribute('aria-label','Filter commands, characteristics or hex');
   const csv = node('button','CSV ↓','small'); csv.id = 'export-csv';
@@ -64,6 +65,7 @@ export function setupLab({ action, review, protocol, report, onSent }) {
   for (const [key, command] of Object.entries(COMMANDS)) {
     if (!command.payload) continue;
     const card = node('article', '', 'card lab-card');
+    card.dataset.command = key;
     const top = node('div', '', 'card-top');
     top.append(node('span', `12 / ${code(command.sub)}`, 'eyebrow'), node('span',command.safety,`badge ${command.safety.toLowerCase()}`));
     card.append(top, node('h3',command.name), node('p',command.note,'footnote'));
@@ -141,7 +143,33 @@ export function setupLab({ action, review, protocol, report, onSent }) {
     row.append(safety,node('td',command.note)); body.append(row);
   }
   table.append(body); reference.append(table);
+  setupQuickControls();
   setupRaw();
+}
+
+function setupQuickControls() {
+  const root = document.getElementById('quick-controls');
+  for (const item of QUICK_CONTROLS) {
+    const row = node('div','','quick-control-row');
+    const identity = node('div');
+    identity.append(node('strong',item.name),node('small',`${item.mapping}${item.experimental ? ' · EXPERIMENTAL' : ''}`));
+    const actions = node('div','','segmented quick-actions');
+    for (const action of item.actions) {
+      const button = node('button',action.label,'lab-send');
+      button.addEventListener('click',() => {
+        if (action.panel) { document.querySelector(`[data-panel="${action.panel}"]`).click(); return; }
+        const card = document.querySelector(`.lab-card[data-command="${item.command}"]`);
+        const state = card.querySelector('[role="switch"]');
+        if (state && action.enabled !== undefined) { state.checked = action.enabled; state.dispatchEvent(new Event('input',{bubbles:true})); }
+        if (item.command === 'notifications') card.querySelector('input[type="checkbox"]:not([role="switch"])').checked = true;
+        card.querySelectorAll('.button-row .lab-send')[action.target ?? 0].click();
+      });
+      actions.append(button);
+    }
+    const status = node('span','State unknown','command-state'); status.dataset.quickStatus = item.command;
+    const controls = node('div','','quick-control-actions'); controls.append(actions,status);
+    row.append(identity,controls); root.append(row);
+  }
 }
 
 function setupRaw() {

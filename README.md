@@ -54,6 +54,7 @@ HTTPS or localhost is required. A phone visiting a computer's plain `http://192.
 - **Dangerous:** JieLi OTA. The app can inspect `AE00`, `AE01` and `AE02` characteristic properties. It does not subscribe, authenticate or write to OTA characteristics, and firmware flashing remains unavailable.
 - **Raw Lab:** build a framed command from group, subcommand and payload, or edit a complete packet. Every arbitrary packet requires a fresh confirmation.
 - **Protocol Reference:** generated from the same command registry used by the controls and decoder, preventing separate hard-coded tables from drifting.
+- **Console quick controls:** the Capture Mappings panel includes compact Off/On, Start/Stop, Set/Delete, SMS test and Watchface buttons. Each opens the same exact packet review used by Device Lab before sending.
 
 ## Activity logs
 

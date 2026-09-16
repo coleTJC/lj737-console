@@ -49,6 +49,19 @@ export const COMMANDS = Object.freeze({
   status: { name:'Transfer status', group:0x20, sub:0x01, safety:'Safe', kind:'receive', note:'Unsigned BE32 status. Uploader replies DC 00 05 20 01 00 0C 01.' },
   ota: { name:'JieLi firmware / OTA', safety:'Dangerous', kind:'disabled', note:'AE00 / AE01 / AE02 discovery only. Authentication unknown; flashing unavailable.' },
 });
+
+export const QUICK_CONTROLS = Object.freeze([
+  {command:'vibration',name:'Vibration',mapping:'12 / 08',actions:[{label:'Off',enabled:false},{label:'On',enabled:true}]},
+  {command:'wake',name:'Raise to wake',mapping:'12 / 09',actions:[{label:'Off',enabled:false},{label:'On',enabled:true}]},
+  {command:'find',name:'Find watch',mapping:'12 / 0B',actions:[{label:'Stop',enabled:false,target:1},{label:'Find',enabled:true,target:0}]},
+  {command:'notifications',name:'Notification mask',mapping:'12 / 07',experimental:true,actions:[{label:'SMS off',enabled:false},{label:'SMS test on*',enabled:true}]},
+  {command:'alarm',name:'Alarm',mapping:'12 / 02',experimental:true,actions:[{label:'Set captured',operation:'set',target:0},{label:'Delete?',operation:'delete',target:1}]},
+  {command:'sedentary',name:'Sedentary reminder',mapping:'12 / 05',experimental:true,actions:[{label:'Off',enabled:false},{label:'On',enabled:true}]},
+  {command:'camera',name:'Camera mode',mapping:'12 / 0C',actions:[{label:'Exit',enabled:false,target:1},{label:'Enter',enabled:true,target:0}]},
+  {command:'heart',name:'Heart measurement',mapping:'12 / 18',actions:[{label:'Stop',enabled:false,target:1},{label:'Start',enabled:true,target:0}]},
+  {command:'ecg',name:'ECG',mapping:'12 / 1A',actions:[{label:'Stop',enabled:false,target:1},{label:'Start',enabled:true,target:0}]},
+  {command:'watchfaces',name:'Watchface transfer',mapping:'1F / 02, 01, 03',actions:[{label:'Open uploader',panel:'dials'}]},
+]);
 export function commandPayload(name, parameters) {
   if (!COMMANDS[name]?.payload) throw new Error('This command is not available as a control.');
   return COMMANDS[name].payload(parameters);

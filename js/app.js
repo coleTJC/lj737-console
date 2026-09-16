@@ -137,6 +137,8 @@ function showSentState(name, parameters) {
   const label = parameters.enabled === undefined ? 'Command sent' : `${parameters.enabled ? 'On / start' : 'Off / stop'} sent`;
   const labResult = document.querySelector(`[data-lab-result][data-command="${name}"]`);
   if (labResult) labResult.textContent = `${label} · not read back.`;
+  const quickResult = document.querySelector(`[data-quick-status="${name}"]`);
+  if (quickResult) quickResult.textContent = `${label} · not read back`;
   if (!['wake','vibration'].includes(name) || parameters.enabled === undefined) return;
   element(`${name}-state`).textContent = `${parameters.enabled ? 'On' : 'Off'} sent · not read back`;
   document.querySelectorAll(`[data-setting="${name}"]`).forEach(item => item.classList.toggle('selected',item.dataset.value === String(parameters.enabled)));

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { COMMANDS, commandPayload, decodePacket, knownDevice } from '../js/commands.js';
+import { COMMANDS, QUICK_CONTROLS, commandPayload, decodePacket, knownDevice } from '../js/commands.js';
 import { frame, hex } from '../js/protocol.js';
 import { exportSession, importSession } from '../js/session.js';
 import { transferPreview } from '../js/transfer-preview.js';
@@ -9,6 +9,15 @@ test('lab payloads reproduce captured alarm and reminder operations', () => {
   assert.equal(hex(commandPayload('alarm', { operation: 'set', bytes: [106,94,199,136,31] })), '6A 5E C7 88 1F');
   assert.equal(commandPayload('alarm', { operation: 'delete' }).length, 0);
   assert.equal(hex(commandPayload('sedentary', { enabled: false, bytes: [0,1,0,150,4,8,22,127] })), '00 00 00 96 04 08 16 7F');
+});
+
+test('compact reference controls cover every mapped command group', () => {
+  assert.deepEqual(QUICK_CONTROLS.map(item => item.command), [
+    'vibration','wake','find','notifications','alarm','sedentary','camera','heart','ecg','watchfaces',
+  ]);
+  assert.deepEqual(QUICK_CONTROLS.find(item => item.command === 'alarm').actions.map(action => action.label), ['Set captured','Delete?']);
+  assert.deepEqual(QUICK_CONTROLS.find(item => item.command === 'notifications').actions.map(action => action.label), ['SMS off','SMS test on*']);
+  assert.equal(QUICK_CONTROLS.find(item => item.command === 'watchfaces').mapping,'1F / 02, 01, 03');
 });
 
 test('SMS test changes only the explicitly selected bit and preserves other bytes', () => {
